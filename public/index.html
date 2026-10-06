@@ -50,6 +50,14 @@
   button:hover { background: #c9c9d2; }
   .status { margin-top: 14px; font-size: 0.9rem; color: #9a9aab; min-height: 1.2em; }
   .error { color: #e06c75; font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+  .success { color: #7ee2a8; }
+  .bar {
+    margin-top: 12px; height: 6px; background: #2a2a33; border-radius: 3px;
+    overflow: hidden; display: none;
+  }
+  .bar > div { height: 100%; width: 0%; background: #e8e8ec; transition: width 0.2s; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .hint { margin-top: 14px; font-size: 0.75rem; color: #5c5c6e; text-align: center; }
 </style>
 </head>
 <body>
@@ -57,25 +65,82 @@
     <h1>Suno Downloader</h1>
     <input id="urlInput" type="text" placeholder="https://suno.com/song/... or share link">
     <button id="downloadBtn">Download</button>
+    <div class="bar" id="bar"><div id="barFill"></div></div>
     <p class="error" id="errorText"></p>
     <p class="status" id="statusText"></p>
+    <p class="hint">Paste a song link, share link (suno.com/s/...), or clip ID.</p>
   </div>
 <script>
   const input = document.getElementById('urlInput');
   const btn = document.getElementById('downloadBtn');
   const status = document.getElementById('statusText');
   const error = document.getElementById('errorText');
+  const bar = document.getElementById('bar');
+  const barFill = document.getElementById('barFill');
 
-  btn.addEventListener('click', () => {
+  function setStatus(text, ok) {
+    status.textContent = text;
+    status.className = 'status' + (ok ? ' success' : '');
+  }
+
+  btn.addEventListener('click', async () => {
     const url = input.value.trim();
     error.textContent = '';
-    status.textContent = '';
+    setStatus('');
+    barFill.style.width = '0%';
     if (!url) {
       error.textContent = 'Please enter a Suno URL.';
       return;
     }
-    status.textContent = 'Starting download...';
-    window.location.href = '/api/download?url=' + encodeURIComponent(url);
+    btn.disabled = true;
+    bar.style.display = 'block';
+    const started = Date.now();
+    try {
+      setStatus('Resolving link and fetching rights...');
+      const res = await fetch('/api/download?url=' + encodeURIComponent(url));
+      if (!res.ok) {
+        let msg = 'Download failed (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
+      const total = parseInt(res.headers.get('content-length') || '0', 10);
+      const reader = res.body.getReader();
+      const chunks = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (total > 0) {
+          const pct = Math.min(99, Math.round(received / total * 100));
+          barFill.style.width = pct + '%';
+          setStatus(`Downloading: ${pct}% (${(received/1048576).toFixed(1)} / ${(total/1048576).toFixed(1)} MB)`);
+        } else {
+          setStatus(`Downloading: ${(received/1048576).toFixed(1)} MB...`);
+        }
+      }
+      const blob = new Blob(chunks, { type: 'audio/mp4' });
+      let filename = 'suno_song.m4a';
+      const cd = res.headers.get('content-disposition') || '';
+      const m = cd.match(/filename="?([^";]+)"?/);
+      if (m) filename = m[1];
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      barFill.style.width = '100%';
+      setStatus(`Done — saved ${filename} (${(blob.size/1048576).toFixed(1)} MB in ${((Date.now()-started)/1000).toFixed(1)}s).`, true);
+    } catch (e) {
+      error.textContent = e.message;
+      setStatus('');
+      bar.style.display = 'none';
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   input.addEventListener('keydown', (e) => {
