@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suno Downloader</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f0f12;
+    color: #e8e8ec;
+    font-family: system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: #18181d;
+    border: 1px solid #2a2a33;
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 480px;
+  }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; text-align: center; }
+  input {
+    width: 100%;
+    padding: 12px 14px;
+    background: #101014;
+    border: 1px solid #2a2a33;
+    border-radius: 8px;
+    color: #e8e8ec;
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  input:focus { outline: none; border-color: #55556a; }
+  button {
+    width: 100%;
+    padding: 12px;
+    background: #e8e8ec;
+    color: #0f0f12;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #c9c9d2; }
+  .status { margin-top: 14px; font-size: 0.9rem; color: #9a9aab; min-height: 1.2em; }
+  .error { color: #e06c75; font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Suno Downloader</h1>
+    <input id="urlInput" type="text" placeholder="https://suno.com/song/... or share link">
+    <button id="downloadBtn">Download</button>
+    <p class="error" id="errorText"></p>
+    <p class="status" id="statusText"></p>
+  </div>
+<script>
+  const input = document.getElementById('urlInput');
+  const btn = document.getElementById('downloadBtn');
+  const status = document.getElementById('statusText');
+  const error = document.getElementById('errorText');
+
+  btn.addEventListener('click', () => {
+    const url = input.value.trim();
+    error.textContent = '';
+    status.textContent = '';
+    if (!url) {
+      error.textContent = 'Please enter a Suno URL.';
+      return;
+    }
+    status.textContent = 'Starting download...';
+    window.location.href = '/api/download?url=' + encodeURIComponent(url);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btn.click();
+  });
+</script>
+</body>
+</html>
