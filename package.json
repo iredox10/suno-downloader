@@ -1,0 +1,10 @@
+{
+  "name": "suno-downloader",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
