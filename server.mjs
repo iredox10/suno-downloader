@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -65,18 +67,23 @@ app.get('/api/download', async (req, res) => {
 
     const enc = new Uint8Array(await (await fetch(mediaUrl)).arrayBuffer());
     const key = await crypto.subtle.importKey('raw', contentKey, { name: 'AES-CTR' }, false, ['decrypt']);
-    const out = new Uint8Array(enc.length);
-    for (let offset = 0; offset < enc.length; offset += 16 * 4096) {
-      const chunk = enc.slice(offset, Math.min(offset + 16 * 4096, enc.length));
-      const counter = new Uint8Array(16); counter.set(contentIv);
-      let c = BigInt(offset / 16);
-      for (let i = 15; i >= 0 && c > 0n; i--, c >>= 8n) counter[i] = Number(c & 0xffn);
-      out.set(new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CTR', counter, length: 128 }, key, chunk)), offset);
-    }
+    const out = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CTR', counter: contentIv, length: 128 }, key, enc));
 
-    res.setHeader('Content-Type', 'audio/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="${clipId}.m4a"`);
-    res.send(Buffer.from(out));
+    // Transcode opus-in-mp4 to a universally playable MP3.
+    const tmpIn = `/tmp/suno_${clipId}_in.m4a`;
+    const tmpOut = `/tmp/suno_${clipId}_out.mp3`;
+    await fs.writeFile(tmpIn, out);
+    await new Promise((resolve, reject) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', '-i', tmpIn, '-c:a', 'libmp3lame', '-b:a', '192k', tmpOut],
+        (err) => (err ? reject(err) : resolve()));
+    });
+    const mp3 = await fs.readFile(tmpOut);
+    fs.unlink(tmpIn).catch(() => {});
+    fs.unlink(tmpOut).catch(() => {});
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="${clipId}.mp3"`);
+    res.send(mp3);
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ error: err.message || 'Internal error' });
